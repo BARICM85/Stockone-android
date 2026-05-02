@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Download, FileSpreadsheet, Loader2, Plus, Search, Trash2, Zap } from 'lucide-react';
@@ -15,13 +16,36 @@ import { derivePortfolioAnalytics, formatCompactCurrency, formatCurrency, format
 import { buildPortfolioAdvancedMetrics } from '@/lib/advancedAnalytics';
 import { getLiveMarketQuote, getLiveMarketQuotes } from '@/lib/brokerClient';
 
-function exportPortfolioToExcel(stocks) {
+function exportPortfolioForImport(stocks) {
   if (stocks.length === 0) {
     toast.error('No stocks to export.');
     return;
   }
 
-  // Create formatted data for Excel
+  // Exact columns ImportDialog expects: BROKER, Stock, Buy Date, Buy Price, Qty, Buy Value
+  const data = stocks.map((stock) => ({
+    BROKER: stock.broker || 'MANUAL',
+    Stock: stock.symbol,
+    'Buy Date': stock.buy_date || '',
+    'Buy Price': stock.buy_price,
+    Qty: stock.quantity,
+    'Buy Value': stock.buy_value || (stock.quantity * stock.buy_price),
+    Exchange: stock.exchange || 'NSE',
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Import_Format');
+  XLSX.writeFile(workbook, 'portfolio-import-format.xlsx');
+  toast.success('Exported in import format.');
+}
+
+function exportPortfolioDetailed(stocks) {
+  if (stocks.length === 0) {
+    toast.error('No stocks to export.');
+    return;
+  }
+
   const data = stocks.map((stock) => ({
     Symbol: stock.symbol,
     Name: stock.name,
@@ -38,10 +62,9 @@ function exportPortfolioToExcel(stocks) {
 
   const worksheet = XLSX.utils.json_to_sheet(data);
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Portfolio');
-
-  XLSX.writeFile(workbook, 'portfolio-export.xlsx');
-  toast.success('Portfolio exported to Excel.');
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Portfolio_PNL');
+  XLSX.writeFile(workbook, 'portfolio-pnl-report.xlsx');
+  toast.success('Exported detailed P&L report.');
 }
 
 export default function Portfolio() {
@@ -175,10 +198,34 @@ export default function Portfolio() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Button variant="outline" onClick={() => exportPortfolioToExcel(stocks)} className="rounded-2xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
-              <Download />
-              Export Excel
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="rounded-2xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+                  <Download />
+                  Export
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 border-white/10 bg-[#0c1422] p-2 text-white">
+                <div className="flex flex-col gap-1">
+                  <Button
+                    variant="ghost"
+                    onClick={() => exportPortfolioForImport(stocks)}
+                    className="justify-start gap-2 rounded-xl text-left hover:bg-white/5 hover:text-amber-200"
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    <span>Import Format</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => exportPortfolioDetailed(stocks)}
+                    className="justify-start gap-2 rounded-xl text-left hover:bg-white/5 hover:text-cyan-200"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>Detailed P&L</span>
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button variant="outline" onClick={() => setImportOpen(true)} className="rounded-2xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
               <FileSpreadsheet />
               Import
