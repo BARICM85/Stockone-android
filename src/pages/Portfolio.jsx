@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Download, FileSpreadsheet, Loader2, Plus, Search, Trash2, Zap } from 'lucide-react';
@@ -14,15 +15,33 @@ import { derivePortfolioAnalytics, formatCompactCurrency, formatCurrency, format
 import { buildPortfolioAdvancedMetrics } from '@/lib/advancedAnalytics';
 import { getLiveMarketQuote, getLiveMarketQuotes } from '@/lib/brokerClient';
 
-function exportPortfolio(rows) {
-  const content = JSON.stringify(rows, null, 2);
-  const blob = new Blob([content], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = 'portfolio-export.json';
-  anchor.click();
-  URL.revokeObjectURL(url);
+function exportPortfolioToExcel(stocks) {
+  if (stocks.length === 0) {
+    toast.error('No stocks to export.');
+    return;
+  }
+
+  // Create formatted data for Excel
+  const data = stocks.map((stock) => ({
+    Symbol: stock.symbol,
+    Name: stock.name,
+    Exchange: stock.exchange || 'NSE',
+    Sector: stock.sector || '--',
+    Quantity: stock.quantity,
+    'Buy Price': stock.buy_price,
+    'Current Price': stock.current_price,
+    'Invested Value': (stock.quantity * stock.buy_price).toFixed(2),
+    'Current Value': (stock.quantity * stock.current_price).toFixed(2),
+    'P&L': ((stock.current_price - stock.buy_price) * stock.quantity).toFixed(2),
+    'P&L %': stock.buy_price ? (((stock.current_price - stock.buy_price) / stock.buy_price) * 100).toFixed(2) + '%' : '0%',
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Portfolio');
+
+  XLSX.writeFile(workbook, 'portfolio-export.xlsx');
+  toast.success('Portfolio exported to Excel.');
 }
 
 export default function Portfolio() {
@@ -156,9 +175,9 @@ export default function Portfolio() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Button variant="outline" onClick={() => exportPortfolio(stocks)} className="rounded-2xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+            <Button variant="outline" onClick={() => exportPortfolioToExcel(stocks)} className="rounded-2xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
               <Download />
-              Export JSON
+              Export Excel
             </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)} className="rounded-2xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
               <FileSpreadsheet />
