@@ -434,8 +434,9 @@ function isFirecrawlConfigured() {
   return Boolean(FIRECRAWL_API_KEY || /localhost|127\.0\.0\.1/i.test(FIRECRAWL_API_BASE_URL));
 }
 
-async function sendTelegramMessage(text = '') {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID || !text) {
+async function sendTelegramMessage(text = '', targetChatId = null) {
+  const chatId = targetChatId || TELEGRAM_CHAT_ID;
+  if (!TELEGRAM_BOT_TOKEN || !chatId || !text) {
     return null;
   }
 
@@ -444,7 +445,7 @@ async function sendTelegramMessage(text = '') {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
+        chat_id: chatId,
         text,
         parse_mode: 'HTML',
       }),
@@ -454,6 +455,190 @@ async function sendTelegramMessage(text = '') {
   } catch (error) {
     console.error('Telegram send failed:', error);
     return null;
+  }
+}
+
+let telegramOffset = 0;
+
+async function pollTelegramUpdates() {
+  if (!TELEGRAM_BOT_TOKEN) return;
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?offset=${telegramOffset}&timeout=30`);
+    const data = await response.json();
+
+    if (data.ok && data.result && data.result.length > 0) {
+      for (const update of data.result) {
+        telegramOffset = update.update_id + 1;
+        await handleTelegramUpdate(update);
+      }
+    }
+  } catch (error) {
+    // Avoid spamming logs if network is down
+  } finally {
+    setTimeout(pollTelegramUpdates, 2000);
+  }
+}
+
+async function handleTelegramUpdate(update) {
+  const message = update.message;
+  if (!message || !message.text) return;
+
+  const chatId = message.chat.id;
+  const text = message.text.trim().toLowerCase();
+
+  // Security: only respond to the configured chat ID if it exists
+  if (TELEGRAM_CHAT_ID && String(chatId) !== String(TELEGRAM_CHAT_ID)) {
+    return;
+  }
+
+  if (text === '/start') {
+    await sendTelegramMessage(`Welcome to TickerTap Portfolio Bot!\n\nYour Chat ID is: <code>${chatId}</code>\n\nUse /summary to get your portfolio status.`, chatId);
+  } else if (text === '/summary' || text === '/portfolio') {
+    await handleTelegramSummary(chatId);
+  } else if (text === '/positions') {
+    await handleTelegramPositions(chatId);
+  } else if (text.startsWith('/quote')) {
+    const parts = message.text.split(' ');
+    const symbol = parts[1]?.toUpperCase();
+    if (!symbol) {
+      await sendTelegramMessage('Please provide a symbol. Example: <code>/quote RELIANCE</code>', chatId);
+    } else {
+      await handleTelegramQuote(chatId, symbol);
+    }
+  } else if (text.startsWith('/news')) {
+    const parts = message.text.split(' ');
+    const symbol = parts[1]?.toUpperCase();
+    if (!symbol) {
+      await sendTelegramMessage('Please provide a symbol. Example: <code>/news RELIANCE</code>', chatId);
+    } else {
+      await handleTelegramNews(chatId, symbol);
+    }
+  } else if (text === '/help') {
+    await sendTelegramMessage(`Available commands:\n/summary - Get portfolio P&L summary\n/portfolio - Same as /summary\n/positions - Get current open positions\n/quote SYMBOL - Get live price for a symbol\n/news SYMBOL - Get latest news for a symbol\n/help - Show this help`, chatId);
+  }
+}
+
+async function handleTelegramQuote(chatId, symbol) {
+  try {
+    const quote = await fetchLiveQuote(symbol);
+    
+    if (!quote) {
+      await sendTelegramMessage(`No quote found for <b>${symbol}</b>.`, chatId);
+      return;
+    }
+
+    const changeEmoji = quote.changePercent >= 0 ? '🟢' : '🔴';
+    const message = [
+      `<b>📈 ${quote.shortName || symbol}</b>`,
+      `Price: ₹${quote.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`,
+      `Change: ${changeEmoji} ${quote.changePercent.toFixed(2)}%`,
+      `Exchange: ${quote.exchange || 'NSE'}`,
+      '',
+      `<a href="${FRONTEND_URL}">Open Dashboard</a>`,
+    ].join('\n');
+
+    await sendTelegramMessage(message, chatId);
+  } catch (error) {
+    await sendTelegramMessage(`Error: ${error.message}`, chatId);
+  }
+}
+
+async function handleTelegramNews(chatId, symbol) {
+  try {
+    const newsItems = await fetchFmp('news/stock', { symbols: symbol, limit: 5 });
+    
+    if (!newsItems || !newsItems.length) {
+      await sendTelegramMessage(`No recent news found for <b>${symbol}</b>.`, chatId);
+      return;
+    }
+
+    const lines = [`<b>📰 Latest News: ${symbol}</b>`, ''];
+    newsItems.forEach((item) => {
+      const date = item.publishedDate ? new Date(item.publishedDate).toLocaleDateString('en-IN') : '';
+      lines.push(`<b>${item.title}</b>`);
+      if (date) lines.push(`<i>${date}</i>`);
+      lines.push(`<a href="${item.url}">Read more</a>`);
+      lines.push('');
+    });
+
+    await sendTelegramMessage(lines.join('\n'), chatId);
+  } catch (error) {
+    await sendTelegramMessage(`Error: ${error.message}`, chatId);
+  }
+}
+
+async function handleTelegramPositions(chatId) {
+  try {
+    const data = await kiteRequest('/portfolio/positions');
+    const netPositions = data?.data?.net || [];
+    
+    if (!netPositions.length) {
+      await sendTelegramMessage('No open positions found.', chatId);
+      return;
+    }
+
+    let totalPL = 0;
+    const lines = ['<b>📂 Open Positions</b>', ''];
+
+    netPositions.forEach((p) => {
+      if (p.quantity !== 0) {
+        const pl = (p.last_price - p.average_price) * p.quantity * (p.multiplier || 1) + p.realised;
+        totalPL += pl;
+        lines.push(`<b>${p.tradingsymbol}</b> (${p.exchange})`);
+        lines.push(`Qty: ${p.quantity} | Avg: ${p.average_price.toFixed(2)}`);
+        lines.push(`LTP: ${p.last_price.toFixed(2)} | P&L: ${pl >= 0 ? '🟢' : '🔴'} ₹${pl.toFixed(2)}`);
+        lines.push('');
+      }
+    });
+
+    if (lines.length <= 2) {
+      await sendTelegramMessage('No active open positions found.', chatId);
+      return;
+    }
+
+    lines.push(`<b>Total Net P&L: ${totalPL >= 0 ? '🟢' : '🔴'} ₹${totalPL.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</b>`);
+    await sendTelegramMessage(lines.join('\n'), chatId);
+  } catch (error) {
+    await sendTelegramMessage(`Error: ${error.message}`, chatId);
+  }
+}
+
+async function handleTelegramSummary(chatId) {
+  try {
+    const data = await kiteRequest('/portfolio/holdings');
+    const holdings = data?.data || [];
+    
+    if (!holdings.length) {
+      await sendTelegramMessage('No holdings found to summarize.', chatId);
+      return;
+    }
+
+    let totalInvested = 0;
+    let totalCurrentValue = 0;
+    holdings.forEach((h) => {
+      totalInvested += h.quantity * h.average_price;
+      totalCurrentValue += h.quantity * h.last_price;
+    });
+
+    const totalPL = totalCurrentValue - totalInvested;
+    const plPercent = totalInvested > 0 ? (totalPL / totalInvested) * 100 : 0;
+
+    const message = [
+      '<b>📊 Portfolio Summary</b>',
+      '',
+      `Total Invested: ₹${totalInvested.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`,
+      `Current Value: ₹${totalCurrentValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`,
+      '',
+      `<b>Overall P&L: ${totalPL >= 0 ? '🟢' : '🔴'} ₹${totalPL.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</b>`,
+      `Percentage: ${plPercent.toFixed(2)}%`,
+      '',
+      `<a href="${FRONTEND_URL}">Open Dashboard</a>`,
+    ].join('\n');
+
+    await sendTelegramMessage(message, chatId);
+  } catch (error) {
+    await sendTelegramMessage(`Error: ${error.message}`, chatId);
   }
 }
 
@@ -2337,4 +2522,10 @@ server.listen(PORT, () => {
   setInterval(checkPortfolioAlerts, ALERT_MONITOR_INTERVAL);
   // Run once on startup
   setTimeout(checkPortfolioAlerts, 10000);
+
+  // Start Telegram bot polling
+  if (TELEGRAM_BOT_TOKEN) {
+    console.log('Starting Telegram bot polling...');
+    pollTelegramUpdates();
+  }
 });

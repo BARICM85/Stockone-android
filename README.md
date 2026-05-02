@@ -13,6 +13,7 @@ Standalone React + Vite stock portfolio analyzing app with Firebase Google login
 - Watchlist with target-price tracking and one-click move into portfolio
 - Google sign-in using Firebase Authentication
 - Local browser storage for portfolio and watchlist data
+- Telegram Bot for remote portfolio monitoring (summary, positions, quotes, news)
 
 ## Run locally
 
@@ -96,6 +97,24 @@ For hosting:
 - Set `ZERODHA_API_KEY` and `ZERODHA_API_SECRET`
 - Whitelist `http://localhost:8000/api/zerodha/callback` as the redirect URL in your Kite Connect app
 - Keep the backend running before clicking Connect Zerodha in the app
+
+## Telegram Bot setup
+
+The backend includes a built-in Telegram bot for monitoring your portfolio on the go.
+
+1. Create a bot using [@BotFather](https://t.me/botfather) and get the **Bot Token**.
+2. Set `TELEGRAM_BOT_TOKEN` in your `.env`.
+3. Start the server, then send `/start` to your bot to get your **Chat ID**.
+4. Set `TELEGRAM_CHAT_ID` in your `.env` to restrict the bot to your account only.
+5. Restart the server.
+
+**Available Commands:**
+
+- `/summary` - Get portfolio P&L summary
+- `/positions` - Get current open positions with live P&L
+- `/quote SYMBOL` - Get live price for any stock (e.g., `/quote RELIANCE`)
+- `/news SYMBOL` - Get latest 5 news items for a symbol
+- `/help` - List all available commands
 
 ## Backtesting and local AI
 

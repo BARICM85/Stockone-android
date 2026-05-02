@@ -40,3 +40,4 @@ dist-ssr
 *.sw?
 
 .env
+.vite-cache/
