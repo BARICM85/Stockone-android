@@ -1,1 +1,126 @@
 
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ───────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Node.js 20 ─────────────────────────────────────────────
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── 3. Java 17 ────────────────────────────────────────────────
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # ── 4. Install npm dependencies ───────────────────────────────
+      - name: Install dependencies
+        run: npm ci
+
+      # ── 5. Write .env file ────────────────────────────────────────
+      - name: Create .env file
+        run: |
+          echo "VITE_FIREBASE_API_KEY=${{ secrets.VITE_FIREBASE_API_KEY || 'placeholder' }}" >> .env
+          echo "VITE_FIREBASE_AUTH_DOMAIN=${{ secrets.VITE_FIREBASE_AUTH_DOMAIN || 'placeholder' }}" >> .env
+          echo "VITE_FIREBASE_PROJECT_ID=${{ secrets.VITE_FIREBASE_PROJECT_ID || 'placeholder' }}" >> .env
+          echo "VITE_FIREBASE_APP_ID=${{ secrets.VITE_FIREBASE_APP_ID || 'placeholder' }}" >> .env
+          echo "VITE_API_BASE_URL=https://tickertap-backend-88ts.onrender.com" >> .env
+          echo "VITE_HOSTED_API_BASE_URL=https://tickertap-backend-88ts.onrender.com" >> .env
+          echo "VITE_RUNTIME_MODE=web" >> .env
+          echo "VITE_STORAGE_NAMESPACE=web" >> .env
+          echo "BACKTEST_RANGE=2y" >> .env
+          echo "BACKTEST_FAST_WINDOW=20" >> .env
+          echo "BACKTEST_SLOW_WINDOW=50" >> .env
+          echo "BACKTEST_INITIAL_CASH=100000" >> .env
+          echo "BACKTEST_COMMISSION_BPS=0" >> .env
+          echo "BACKTEST_BENCHMARK_SYMBOL=^NSEI" >> .env
+          echo "BACKTEST_ENGINE=js" >> .env
+
+      # ── 6. Build web app ──────────────────────────────────────────
+      - name: Build web app
+        run: npm run build:web
+
+      # ── 7. Write google-services.json ─────────────────────────────
+      - name: Write google-services.json
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+          else
+            cat > android/app/google-services.json << 'GSJSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "placeholder-project",
+              "storage_bucket": "placeholder-project.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                  "android_client_info": {
+                    "package_name": "com.bariyaone.tickertap"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "placeholder" }],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": []
+                  }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          GSJSON
+          fi
+
+      # ── 8. Capacitor sync ─────────────────────────────────────────
+      - name: Capacitor sync
+        run: npx cap sync android
+
+      # ── 9. Cache Gradle ───────────────────────────────────────────
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/**/*.gradle*') }}
+          restore-keys: gradle-
+
+      # ── 10. Make gradlew executable ───────────────────────────────
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      # ── 11. Build debug APK ───────────────────────────────────────
+      - name: Build debug APK
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon --max-workers=2 --stacktrace
+        timeout-minutes: 20
+
+      # ── 12. Upload APK artifact ───────────────────────────────────
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tickertap-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
