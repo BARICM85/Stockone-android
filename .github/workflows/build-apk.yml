@@ -1,10 +1,13 @@
-
 name: Build Android APK
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  NODE_VERSION: '22'
 
 jobs:
   build:
@@ -15,25 +18,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Node.js 20 ─────────────────────────────────────────────
-      - name: Set up Node.js 20
+      # ── 2. Node.js 22 (must be first, before any npm/npx call) ───
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
-      # ── 3. Java 17 ────────────────────────────────────────────────
+      # ── 3. Confirm Node version ───────────────────────────────────
+      - name: Confirm Node version
+        run: |
+          node -v
+          npm -v
+          which node
+
+      # ── 4. Java 17 ────────────────────────────────────────────────
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # ── 4. Install npm dependencies ───────────────────────────────
+      # ── 5. Install npm dependencies ───────────────────────────────
       - name: Install dependencies
         run: npm ci
 
-      # ── 5. Write .env file ────────────────────────────────────────
+      # ── 6. Write .env file ────────────────────────────────────────
       - name: Create .env file
         run: |
           echo "VITE_FIREBASE_API_KEY=${{ secrets.VITE_FIREBASE_API_KEY || 'placeholder' }}" >> .env
@@ -52,11 +62,11 @@ jobs:
           echo "BACKTEST_BENCHMARK_SYMBOL=^NSEI" >> .env
           echo "BACKTEST_ENGINE=js" >> .env
 
-      # ── 6. Build web app ──────────────────────────────────────────
+      # ── 7. Build web app ──────────────────────────────────────────
       - name: Build web app
         run: npm run build:web
 
-      # ── 7. Write google-services.json ─────────────────────────────
+      # ── 8. Write google-services.json ─────────────────────────────
       - name: Write google-services.json
         run: |
           if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
@@ -91,11 +101,11 @@ jobs:
           GSJSON
           fi
 
-      # ── 8. Capacitor sync ─────────────────────────────────────────
+      # ── 9. Capacitor sync (uses Node 22 from step 2) ──────────────
       - name: Capacitor sync
-        run: npx cap sync android
+        run: node --version && npx cap sync android
 
-      # ── 9. Cache Gradle ───────────────────────────────────────────
+      # ── 10. Cache Gradle ──────────────────────────────────────────
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
@@ -105,18 +115,18 @@ jobs:
           key: gradle-${{ hashFiles('android/**/*.gradle*') }}
           restore-keys: gradle-
 
-      # ── 10. Make gradlew executable ───────────────────────────────
+      # ── 11. Make gradlew executable ───────────────────────────────
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # ── 11. Build debug APK ───────────────────────────────────────
+      # ── 12. Build debug APK ───────────────────────────────────────
       - name: Build debug APK
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --max-workers=2 --stacktrace
-        timeout-minutes: 20
+          ./gradlew assembleDebug --no-daemon --max-workers=2 --stacktrace 2>&1
+        timeout-minutes: 25
 
-      # ── 12. Upload APK artifact ───────────────────────────────────
+      # ── 13. Upload APK artifact ───────────────────────────────────
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
