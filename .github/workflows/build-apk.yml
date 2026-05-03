@@ -31,18 +31,14 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ── 4. Install Android SDK 36 components ──────────────────────
+      # ── 4. Install Android SDK 36 ─────────────────────────────────
       - name: Install Android SDK 36
         run: |
-          echo "Accepting licenses..."
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          echo "Installing SDK 36 + build-tools..."
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
             "platform-tools" \
             "platforms;android-36" \
             "build-tools;36.0.0"
-          echo "Installed SDK components:"
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list_installed
 
       # ── 5. Install npm dependencies ───────────────────────────────
       - name: Install dependencies
@@ -128,18 +124,24 @@ jobs:
       - name: Build debug APK
         run: |
           cd android
-          ./gradlew assembleDebug \
-            --no-daemon \
-            --max-workers=2 \
-            --stacktrace 2>&1 | tail -150
+          ./gradlew assembleDebug --no-daemon --max-workers=2
         timeout-minutes: 25
 
-      # ── 13. Upload APK artifact ───────────────────────────────────
+      # ── 13. Find APK (wherever Gradle put it) ─────────────────────
+      - name: Find APK
+        run: |
+          echo "Searching for APK files..."
+          find android -name "*.apk" 2>/dev/null
+          echo "--- build outputs folder ---"
+          find android/app/build -type f 2>/dev/null || echo "No build folder found"
+
+      # ── 14. Upload APK artifact (wildcard search) ──────────────────
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: tickertap-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/**/*.apk
           retention-days: 30
+          if-no-files-found: warn
 
 
