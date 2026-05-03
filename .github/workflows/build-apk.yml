@@ -7,7 +7,6 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  NODE_VERSION: '22'
 
 jobs:
   build:
@@ -18,26 +17,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Node.js 22 (must be first, before any npm/npx call) ───
+      # ── 2. Node.js 22 ─────────────────────────────────────────────
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
 
-      # ── 3. Confirm Node version ───────────────────────────────────
-      - name: Confirm Node version
-        run: |
-          node -v
-          npm -v
-          which node
-
-      # ── 4. Java 17 ────────────────────────────────────────────────
+      # ── 3. Java 17 ────────────────────────────────────────────────
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+
+      # ── 4. Install Android SDK 36 components ──────────────────────
+      - name: Install Android SDK 36
+        run: |
+          echo "Accepting licenses..."
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          echo "Installing SDK 36 + build-tools..."
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0"
+          echo "Installed SDK components:"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list_installed
 
       # ── 5. Install npm dependencies ───────────────────────────────
       - name: Install dependencies
@@ -101,7 +106,7 @@ jobs:
           GSJSON
           fi
 
-      # ── 9. Capacitor sync (uses Node 22 from step 2) ──────────────
+      # ── 9. Capacitor sync ─────────────────────────────────────────
       - name: Capacitor sync
         run: node --version && npx cap sync android
 
@@ -123,7 +128,10 @@ jobs:
       - name: Build debug APK
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --max-workers=2 --stacktrace 2>&1
+          ./gradlew assembleDebug \
+            --no-daemon \
+            --max-workers=2 \
+            --stacktrace 2>&1 | tail -150
         timeout-minutes: 25
 
       # ── 13. Upload APK artifact ───────────────────────────────────
@@ -133,4 +141,5 @@ jobs:
           name: tickertap-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
 
