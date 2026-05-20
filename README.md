@@ -1,4 +1,4 @@
-# TickerTap Clone Portfolio Analyzer
+# stockone Portfolio Analyzer
 
 Standalone React + Vite stock portfolio analyzing app with Firebase Google login and Zerodha broker sync support.
 
