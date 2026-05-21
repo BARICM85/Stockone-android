@@ -35,7 +35,7 @@ const FRONTEND_URL = env.ZERODHA_FRONTEND_URL || 'http://localhost:5173';
 const REDIRECT_URI = env.ZERODHA_REDIRECT_URI || `http://localhost:${PORT}/api/zerodha/callback`;
 const SESSION_PATH = resolve(projectRoot, env.ZERODHA_SESSION_PATH || 'server/.zerodha-session.json');
 const AUTH_CONTEXT_PATH = resolve(projectRoot, env.ZERODHA_AUTH_CONTEXT_PATH || 'server/.zerodha-auth-context.json');
-const NATIVE_REDIRECT_URL = env.ZERODHA_NATIVE_REDIRECT_URL || 'tickertap://zerodha/callback';
+const NATIVE_REDIRECT_URL = env.ZERODHA_NATIVE_REDIRECT_URL || 'stockone://zerodha/callback';
 const FMP_API_KEY = env.FMP_API_KEY || '';
 const FMP_API_BASE_URL = env.FMP_API_BASE_URL || 'https://financialmodelingprep.com/stable';
 const OLLAMA_BASE_URL = env.OLLAMA_BASE_URL || '';
@@ -1989,6 +1989,47 @@ function runVectorbtBacktest(points = [], benchmarkPoints = [], settings = {}) {
   }
 }
 
+const NSE_INDEX_SECTORS = [
+  { symbol: 'NIFTY 50', name: 'Nifty 50', color: '#000000' },
+  { symbol: 'NIFTY BANK', name: 'Bank Nifty', color: '#2196F3' },
+  { symbol: 'NIFTY IT', name: 'IT', color: '#00BCD4' },
+  { symbol: 'NIFTY AUTO', name: 'Auto', color: '#2196F3' },
+  { symbol: 'NIFTY PHARMA', name: 'Pharma', color: '#E91E63' },
+  { symbol: 'NIFTY FMCG', name: 'FMCG', color: '#8BC34A' },
+  { symbol: 'NIFTY METAL', name: 'Metal', color: '#795548' },
+  { symbol: 'NIFTY REALTY', name: 'Realty', color: '#009688' },
+  { symbol: 'NIFTY ENERGY', name: 'Energy', color: '#FF5722' },
+  { symbol: 'NIFTY INFRA', name: 'Infra', color: '#9E9E9E' },
+  { symbol: 'NIFTY MEDIA', name: 'Media', color: '#F7931A' },
+  { symbol: 'NIFTY PSU BANK', name: 'PSU Bank', color: '#FF9800' },
+  { symbol: 'NIFTY PVT BANK', name: 'Pvt Bank', color: '#9C27B0' },
+  { symbol: 'NIFTY COMMODITIES', name: 'Commodities', color: '#FFEB3B' },
+];
+
+function runRrgCalculator(data, benchmark, tailLength) {
+  const scriptPath = resolve(projectRoot, 'server/rrg_calculator.py');
+  if (!existsSync(scriptPath)) {
+    throw new Error('RRG calculator script not found.');
+  }
+
+  const payload = { data, benchmark, tailLength };
+  const result = spawnSync(PYTHON_BIN, [scriptPath], {
+    input: JSON.stringify(payload),
+    encoding: 'utf8',
+    maxBuffer: 15 * 1024 * 1024,
+  });
+
+  if (result.status !== 0 || !result.stdout) {
+    throw new Error(result.stderr || 'RRG calculator failed.');
+  }
+
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    throw new Error('Invalid JSON from RRG calculator.');
+  }
+}
+
 const server = createServer(async (req, res) => {
   if (!req.url) return sendJson(res, 400, { error: 'Missing URL.' });
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -2005,6 +2046,54 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && url.pathname === '/api/health') {
       return sendJson(res, 200, { ok: true });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/rrg') {
+      const benchmark = url.searchParams.get('benchmark') || 'NIFTY 50';
+      const tailLength = Number(url.searchParams.get('tail')) || 8;
+
+      const allSymbols = [...new Set([benchmark, ...NSE_INDEX_SECTORS.map((s) => s.symbol)])];
+      const dataMap = {};
+
+      await Promise.all(
+        allSymbols.map(async (symbol) => {
+          try {
+            const history = await fetchMarketHistory(symbol, '2y', '1d', 'NSE');
+            if (history?.points) {
+              const prices = {};
+              history.points.forEach((p) => {
+                prices[p.date] = p.close;
+              });
+              dataMap[symbol] = prices;
+            }
+          } catch (err) {
+            console.error(`Failed to fetch history for RRG symbol ${symbol}:`, err.message);
+          }
+        }),
+      );
+
+      try {
+        const result = runRrgCalculator(dataMap, benchmark, tailLength);
+        
+        // Attach metadata (colors and names) to the result
+        const enhancedSectors = {};
+        Object.entries(result.sectors).forEach(([sym, rrg]) => {
+          const meta = NSE_INDEX_SECTORS.find(s => s.symbol === sym) || { name: sym, color: '#9E9E9E' };
+          enhancedSectors[sym] = {
+            ...rrg,
+            symbol: sym,
+            name: meta.name,
+            color: meta.color,
+          };
+        });
+        
+        return sendJson(res, 200, {
+          ...result,
+          sectors: enhancedSectors,
+        });
+      } catch (err) {
+        return sendJson(res, 500, { error: err.message });
+      }
     }
 
     if (req.method === 'POST' && url.pathname === '/api/backtest/portfolio') {

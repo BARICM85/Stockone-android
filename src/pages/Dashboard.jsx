@@ -4,6 +4,7 @@ import { ArrowUpRight, Bell, RefreshCw, TrendingDown, TrendingUp } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';
 import BrokerSyncPanel from '@/components/integrations/BrokerSyncPanel';
+import SectorRotationSection from '@/components/dashboard/SectorRotationSection';
 import PortfolioStats from '@/components/dashboard/PortfolioStats';
 import CustomTestingSection from '@/components/dashboard/CustomTestingSection';
 import BacktestSection from '@/components/dashboard/BacktestSection';
@@ -89,6 +90,8 @@ export default function Dashboard() {
           await queryClient.invalidateQueries({ queryKey: ['stocks'] });
         }}
       />
+
+      <SectorRotationSection />
 
       <PortfolioStats analytics={analytics} />
 
