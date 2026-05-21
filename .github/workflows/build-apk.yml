@@ -51,8 +51,8 @@ jobs:
           echo "VITE_FIREBASE_AUTH_DOMAIN=${{ secrets.VITE_FIREBASE_AUTH_DOMAIN || 'placeholder' }}" >> .env
           echo "VITE_FIREBASE_PROJECT_ID=${{ secrets.VITE_FIREBASE_PROJECT_ID || 'placeholder' }}" >> .env
           echo "VITE_FIREBASE_APP_ID=${{ secrets.VITE_FIREBASE_APP_ID || 'placeholder' }}" >> .env
-          echo "VITE_API_BASE_URL=https://tickertap-backend-88ts.onrender.com" >> .env
-          echo "VITE_HOSTED_API_BASE_URL=https://tickertap-backend-88ts.onrender.com" >> .env
+          echo "VITE_API_BASE_URL=https://stocone-backend.com" >> .env
+          echo "VITE_HOSTED_API_BASE_URL=https://stocone-backend.com" >> .env
           echo "VITE_RUNTIME_MODE=web" >> .env
           echo "VITE_STORAGE_NAMESPACE=web" >> .env
           echo "BACKTEST_RANGE=2y" >> .env
