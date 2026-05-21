@@ -174,7 +174,7 @@ export default function AppLayout() {
               <TrendingUp className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-900">TickerTap Clone</p>
+              <p className="text-sm font-semibold text-slate-900">StockOne Portfolio</p>
               <p className="text-xs text-slate-500">Portfolio analyzer</p>
             </div>
           </div>

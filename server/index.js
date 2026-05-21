@@ -493,7 +493,7 @@ async function handleTelegramUpdate(update) {
   }
 
   if (text === '/start') {
-    await sendTelegramMessage(`Welcome to TickerTap Portfolio Bot!\n\nYour Chat ID is: <code>${chatId}</code>\n\nUse /summary to get your portfolio status.`, chatId);
+    await sendTelegramMessage(`Welcome to StockOne Portfolio Bot!\n\nYour Chat ID is: <code>${chatId}</code>\n\nUse /summary to get your portfolio status.`, chatId);
   } else if (text === '/summary' || text === '/portfolio') {
     await handleTelegramSummary(chatId);
   } else if (text === '/positions') {

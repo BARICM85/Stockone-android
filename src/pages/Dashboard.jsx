@@ -58,7 +58,7 @@ export default function Dashboard() {
       <section className="app-hero rounded-[36px] p-6">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
-            <p className="text-xs uppercase tracking-[0.28em] text-orange-500/80">Zerodha-inspired light theme</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-orange-500/80">StockOne analyzer</p>
             <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-900">A calmer command center for holdings, risk, and trade prep</h1>
             <p className="mt-3 app-subtle-text">
               The dashboard is now tuned for faster reading: clearer priority cards, less visual noise, and a steadier theme for long portfolio review sessions.
