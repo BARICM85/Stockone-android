@@ -4,7 +4,7 @@ import { Loader2, LogOut, RefreshCw, Send, ShieldCheck, Wallet } from 'lucide-re
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';
-import { disconnectZerodha, getBrokerApiBase, getZerodhaHoldings, getZerodhaLoginUrl, getZerodhaPositions, getZerodhaRedirectUrl, getZerodhaStatus, mapZerodhaHoldingToPortfolio, testTelegramAlert } from '@/lib/brokerClient';
+import { disconnectZerodha, getBrokerApiBase, getZerodhaHoldings, getZerodhaLoginUrl, getZerodhaPositions, getZerodhaRedirectUrl, getZerodhaStatus, mapZerodhaHoldingToPortfolio, mapZerodhaPositionToPortfolio, testTelegramAlert } from '@/lib/brokerClient';
 
 export default function BrokerSyncPanel({ currentStocks = [], onSynced }) {
   const [status, setStatus] = useState(null);
@@ -55,46 +55,81 @@ export default function BrokerSyncPanel({ currentStocks = [], onSynced }) {
         getZerodhaPositions().catch(() => ({ data: { net: [], day: [] } })),
       ]);
 
-      const brokerHoldings = holdingsData?.data || [];
+      const rawHoldings = holdingsData?.data || [];
+      const rawPositions = (positionsData?.data?.net || []).filter((p) => p.quantity !== 0);
+
+      // Map both holdings and positions
+      const mappedHoldings = rawHoldings.map((item) => ({
+        ...mapZerodhaHoldingToPortfolio(item),
+        raw: item,
+      }));
+      const mappedPositions = rawPositions.map((item) => ({
+        ...mapZerodhaPositionToPortfolio(item),
+        raw: item,
+      }));
+
+      // Merge by exchange:symbol key
+      const mergedMap = new Map();
+      mappedHoldings.forEach((m) => {
+        mergedMap.set(getHoldingKey(m), m);
+      });
+
+      // Add positions - if stock exists in holdings (like T1), we sum the quantities
+      mappedPositions.forEach((m) => {
+        const key = getHoldingKey(m);
+        const existing = mergedMap.get(key);
+        if (existing) {
+          // Zerodha Holdings API includes T1. Positions(net) includes today's net change.
+          // Summing ensures we capture intraday buys/sells on top of existing holdings.
+          existing.quantity += m.quantity;
+          existing.notes = `${existing.notes} | ${m.notes}`.slice(0, 200);
+        } else {
+          mergedMap.set(key, m);
+        }
+      });
+
+      const brokerHoldings = Array.from(mergedMap.values());
+      const nextStocks = [...currentStocks];
       let createdCount = 0;
       let updatedCount = 0;
       const diagnostics = [];
       const keyCounts = new Map();
 
-      for (const item of brokerHoldings) {
-        const mapped = mapZerodhaHoldingToPortfolio(item);
+      for (const mapped of brokerHoldings) {
+        const item = mapped.raw;
         const mappedKey = getHoldingKey(mapped);
-        const existing = currentStocks.find((stock) => getHoldingKey(stock) === mappedKey);
+        const existingIndex = nextStocks.findIndex((stock) => getHoldingKey(stock) === mappedKey);
         keyCounts.set(mappedKey, (keyCounts.get(mappedKey) || 0) + 1);
 
         diagnostics.push({
           key: mappedKey,
           exchange: mapped.exchange || item.exchange || '--',
           symbol: mapped.symbol || item.tradingsymbol || item.symbol || '--',
-          companyName: mapped.name || item.company_name || '--',
-          quantity: Number(item.quantity ?? item.used_quantity ?? item.t1_quantity ?? mapped.quantity ?? 0),
-          averagePrice: Number(item.average_price ?? item.t1_average_price ?? mapped.buy_price ?? 0),
-          lastPrice: Number(item.last_price ?? item.close_price ?? mapped.current_price ?? 0),
+          quantity: mapped.quantity,
+          averagePrice: mapped.buy_price,
+          lastPrice: mapped.current_price,
           isin: String(item.isin || '').trim() || '--',
-          status: existing ? 'update' : 'create',
+          status: existingIndex !== -1 ? 'update' : 'create',
           queryHint: mappedKey,
-          rawTradingSymbol: item.tradingsymbol || item.symbol || '--',
-          rawExchange: item.exchange || '--',
         });
 
-        if (existing) {
+        if (existingIndex !== -1) {
           updatedCount += 1;
-          await base44.entities.Stock.update(existing.id, {
+          const existing = nextStocks[existingIndex];
+          nextStocks[existingIndex] = {
             ...existing,
             ...mapped,
             id: existing.id,
             created_date: existing.created_date,
-          });
+          };
         } else {
           createdCount += 1;
-          await base44.entities.Stock.create(mapped);
+          nextStocks.push(mapped);
         }
       }
+
+      // Perform a bulk replace for efficiency
+      await base44.entities.Stock.replace(nextStocks);
 
       const duplicateDiagnostics = diagnostics.filter((row) => (keyCounts.get(row.key) || 0) > 1);
       const reviewDiagnostics = diagnostics.filter((row) => (
@@ -105,16 +140,15 @@ export default function BrokerSyncPanel({ currentStocks = [], onSynced }) {
         || !['NSE', 'BSE'].includes(String(row.exchange || '').trim().toUpperCase())
         || (keyCounts.get(row.key) || 0) > 1
       ));
-      const queryList = diagnostics.map((row) => row.queryHint);
 
       console.groupCollapsed('[TickerTap] Zerodha holdings sync diagnostics');
       console.info('Counts', {
-        rawHoldings: brokerHoldings.length,
-        uniqueKeys: new Set(diagnostics.map((row) => row.key)).size,
+        rawHoldings: rawHoldings.length,
+        rawPositions: rawPositions.length,
+        uniqueKeys: mergedMap.size,
         createdCount,
         updatedCount,
       });
-      console.log('[TickerTap] Zerodha query list:', queryList);
       console.table(diagnostics);
       if (duplicateDiagnostics.length) {
         console.warn('[TickerTap] Duplicate Zerodha holding keys detected:');
@@ -123,12 +157,10 @@ export default function BrokerSyncPanel({ currentStocks = [], onSynced }) {
       if (reviewDiagnostics.length) {
         console.warn('[TickerTap] Review these holdings first:');
         console.table(reviewDiagnostics);
-        console.log('[TickerTap] Review query list:', reviewDiagnostics.map((row) => row.queryHint));
       }
       console.groupEnd();
 
-      const netPositions = positionsData?.data?.net || [];
-      toast.success(`Zerodha synced. ${createdCount} added, ${updatedCount} updated, ${netPositions.length} net positions fetched. Open console for the holding query list.`);
+      toast.success(`Zerodha synced. ${createdCount} added, ${updatedCount} updated. ${rawPositions.length} active positions processed.`);
       await onSynced?.();
       await loadStatus();
     } catch (error) {

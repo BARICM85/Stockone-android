@@ -212,12 +212,12 @@ export function mapZerodhaHoldingToPortfolio(holding) {
   const exchange = String(holding.exchange || 'NSE').trim().toUpperCase() || 'NSE';
   const currentPrice = Number(holding.last_price || holding.close_price || 0);
   const averagePrice = Number(holding.average_price || holding.t1_average_price || currentPrice || 0);
-  const quantity = Number(
-    holding.quantity
-    ?? holding.used_quantity
-    ?? holding.t1_quantity
-    ?? 0,
-  );
+  
+  // Summing all relevant quantities to handle T1 and Pledged shares correctly
+  // Zerodha API: quantity (settled), t1_quantity (yesterday's buy), collateral_quantity (pledged)
+  const quantity = Number(holding.quantity || 0) + 
+                   Number(holding.t1_quantity || 0) + 
+                   Number(holding.collateral_quantity || 0);
 
   return {
     symbol,
@@ -230,6 +230,27 @@ export function mapZerodhaHoldingToPortfolio(holding) {
     currency: 'INR',
     exchange,
     notes: `Imported from Zerodha ${holding.product ? `(${holding.product})` : ''}`.trim(),
+  };
+}
+
+export function mapZerodhaPositionToPortfolio(position) {
+  const symbol = position.tradingsymbol || position.symbol;
+  const exchange = String(position.exchange || 'NSE').trim().toUpperCase() || 'NSE';
+  const currentPrice = Number(position.last_price || 0);
+  const averagePrice = Number(position.average_price || currentPrice || 0);
+  const quantity = Number(position.quantity || 0);
+
+  return {
+    symbol,
+    name: symbol,
+    sector: 'Broker Position',
+    quantity,
+    buy_price: averagePrice || currentPrice,
+    current_price: currentPrice || averagePrice,
+    buy_date: new Date().toISOString().slice(0, 10),
+    currency: 'INR',
+    exchange,
+    notes: `Imported from Zerodha Positions (${position.product || ''})`.trim(),
   };
 }
 
