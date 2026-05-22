@@ -326,6 +326,25 @@ const UNDERLYING_ALIAS_MAP = {
   MIDCPNIFTY: ['MIDCPNIFTY', 'MIDCAPNIFTY', 'NIFTY MID SELECT'],
 };
 
+const YAHOO_INDEX_ALIAS_MAP = {
+  'NIFTY 50': '^NSEI',
+  'NIFTY BANK': '^NSEBANK',
+  'NIFTY NEXT 50': '^NSMIDCP',
+  'NIFTY 500': 'NIFTY_500.NS',
+  'NIFTY IT': '^CNXIT',
+  'NIFTY AUTO': '^CNXAUTO',
+  'NIFTY PHARMA': '^CNXPHARMA',
+  'NIFTY FMCG': '^CNXFMCG',
+  'NIFTY METAL': '^CNXMETAL',
+  'NIFTY REALTY': '^CNXREALTY',
+  'NIFTY ENERGY': '^CNXENERGY',
+  'NIFTY INFRA': '^CNXINFRA',
+  'NIFTY MEDIA': '^CNXMEDIA',
+  'NIFTY PSU BANK': '^NIFTYPSU',
+  'NIFTY PVT BANK': '^NIFTYPVTBANK',
+  'NIFTY COMMODITIES': '^CNXCOMMODITIES',
+};
+
 function getUnderlyingAliases(symbol = '') {
   const trimmed = symbol.trim().toUpperCase();
   if (!trimmed) return [];
@@ -338,6 +357,9 @@ function buildYahooSymbolCandidates(symbol = '', exchange = 'NSE') {
   if (!trimmed) return [];
   if (UNDERLYING_ALIAS_MAP[trimmed]) {
     return [...new Set(getUnderlyingAliases(trimmed))];
+  }
+  if (YAHOO_INDEX_ALIAS_MAP[trimmed]) {
+    return [...new Set([YAHOO_INDEX_ALIAS_MAP[trimmed], trimmed, `${YAHOO_INDEX_ALIAS_MAP[trimmed]}.NS`])];
   }
   if (trimmed.startsWith('^')) return [trimmed];
   if (trimmed.includes('_')) return [trimmed, `${trimmed}.NS`];
