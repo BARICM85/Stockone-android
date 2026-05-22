@@ -162,6 +162,26 @@ function clearAuthContext() {
   if (existsSync(AUTH_CONTEXT_PATH)) unlinkSync(AUTH_CONTEXT_PATH);
 }
 
+function getRequestFrontendOrigin(req) {
+  const originHeader = String(req?.headers?.origin || '').trim();
+  const refererHeader = String(req?.headers?.referer || req?.headers?.referrer || '').trim();
+  const candidates = [originHeader, refererHeader];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.origin;
+      }
+    } catch {
+      // Ignore invalid header values and fall back to the configured frontend URL.
+    }
+  }
+
+  return FRONTEND_URL;
+}
+
 function readJsonFile(filePath) {
   if (!existsSync(filePath)) return null;
   try {
@@ -296,7 +316,7 @@ function getLoginUrl() {
   return base.toString();
 }
 
-function buildFrontendRedirect(status, error, target = 'web') {
+function buildFrontendRedirect(status, error, target = 'web', frontendUrl = FRONTEND_URL) {
   if (target === 'native') {
     const url = new URL(NATIVE_REDIRECT_URL);
     url.searchParams.set('broker', 'zerodha');
@@ -305,7 +325,7 @@ function buildFrontendRedirect(status, error, target = 'web') {
     return url.toString();
   }
 
-  const url = new URL('/Portfolio', FRONTEND_URL);
+  const url = new URL('/Portfolio', frontendUrl || FRONTEND_URL);
   url.searchParams.set('broker', 'zerodha');
   url.searchParams.set('status', status);
   if (error) url.searchParams.set('error', error);
@@ -2485,6 +2505,7 @@ const server = createServer(async (req, res) => {
       const platform = url.searchParams.get('platform') === 'native' ? 'native' : 'web';
       writeAuthContext({
         platform,
+        frontend_url: platform === 'web' ? getRequestFrontendOrigin(req) : null,
         created_at: new Date().toISOString(),
       });
       return sendJson(res, 200, {
@@ -2497,16 +2518,17 @@ const server = createServer(async (req, res) => {
       const requestToken = url.searchParams.get('request_token');
       const authContext = readAuthContext();
       const redirectTarget = authContext?.platform === 'native' ? 'native' : 'web';
+      const frontendUrl = authContext?.frontend_url || FRONTEND_URL;
       clearAuthContext();
       if (!requestToken) {
-        return redirect(res, buildFrontendRedirect('error', 'missing_request_token', redirectTarget));
+        return redirect(res, buildFrontendRedirect('error', 'missing_request_token', redirectTarget, frontendUrl));
       }
 
       try {
         await exchangeRequestToken(requestToken);
-        return redirect(res, buildFrontendRedirect('connected', null, redirectTarget));
+        return redirect(res, buildFrontendRedirect('connected', null, redirectTarget, frontendUrl));
       } catch (error) {
-        return redirect(res, buildFrontendRedirect('error', error.message, redirectTarget));
+        return redirect(res, buildFrontendRedirect('error', error.message, redirectTarget, frontendUrl));
       }
     }
 
