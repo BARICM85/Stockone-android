@@ -236,12 +236,10 @@ export default function BrokerSyncPanel({ currentStocks = [], onSynced }) {
 
             <div className="mt-4 text-sm text-slate-400">
               {backendUnavailable
-                ? 'Hosted broker backend is currently unavailable. Restart or redeploy the backend service in Render, then retry Zerodha connect.'
+                ? 'Hosted broker backend is currently unavailable. Restart or redeploy the Render service, then retry Zerodha connect.'
                 : status?.connected
                 ? `Ready to sync live holdings. Current local portfolio already contains ${currentSymbols.size} symbols.`
-                : usesHostedBroker
-                  ? 'Hosted backend is active. Add Zerodha credentials to the backend environment and then connect your account to fetch live broker data.'
-                  : 'Add Zerodha API credentials in your local .env and connect your account to fetch live broker data.'}
+                : 'Hosted backend is active. Add Zerodha credentials to the Render environment and then connect your account to fetch live broker data.'}
             </div>
 
             {status?.error ? <p className="mt-3 text-sm text-rose-300">{status.error}</p> : null}
@@ -269,15 +267,15 @@ export default function BrokerSyncPanel({ currentStocks = [], onSynced }) {
       </div>
 
       <div className="mt-5 rounded-[24px] border border-white/8 bg-[#111c2c] p-4 text-sm text-slate-400">
-        {usesHostedBroker ? 'Hosted backend active:' : 'Local backend active:'}
-        <code className="mx-1 rounded bg-black/20 px-2 py-0.5 text-slate-200">{brokerApiBase || 'http://localhost:8000'}</code>
+        Hosted backend active:
+        <code className="mx-1 rounded bg-black/20 px-2 py-0.5 text-slate-200">{brokerApiBase || 'https://tickertap-backend-88ts.onrender.com'}</code>
         {' '}with Zerodha redirect URL
         <code className="mx-1 rounded bg-black/20 px-2 py-0.5 text-slate-200">{redirectUrl}</code>.
-        {!usesHostedBroker ? (
+        {usesHostedBroker ? null : (
           <>
-            {' '}Run <code className="mx-1 rounded bg-black/20 px-2 py-0.5 text-slate-200">npm run dev:server</code> for local broker testing.
+            {' '}If you are testing locally, run <code className="mx-1 rounded bg-black/20 px-2 py-0.5 text-slate-200">npm run dev:server</code> and set the local env file.
           </>
-        ) : null}
+        )}
       </div>
     </section>
   );
