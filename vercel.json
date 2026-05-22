@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://tickertap-backend-88ts.onrender.com/api/$1"
+    },
+    {
       "source": "/((?!api).*)",
       "destination": "/index.html"
     }
