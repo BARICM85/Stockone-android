@@ -16,6 +16,9 @@ export function getBrokerApiBase() {
   if (Capacitor.isNativePlatform() && (!configuredBase || isLocalApiBase(configuredBase))) {
     return trimSlash(HOSTED_API_BASE);
   }
+  if (import.meta.env.PROD) {
+    return '';
+  }
   return configuredBase;
 }
 
