@@ -281,7 +281,7 @@ export default function BrokerSyncPanel({ currentStocks = [], onSynced }) {
           <>
             {' '}If you are testing locally, run <code className="mx-1 rounded bg-black/20 px-2 py-0.5 text-slate-200">npm run dev:server</code> and set the local env file.
           </>
-        )}
+        ) : null}
       </div>
     </section>
   );
