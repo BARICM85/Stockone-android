@@ -3,9 +3,11 @@ services:
     name: tickertap-backend
     runtime: node
     plan: free
+    branch: main
     buildCommand: npm install
     startCommand: npm run start:server
     autoDeploy: true
+    healthCheckPath: /api/health
     envVars:
       - key: ZERODHA_SERVER_PORT
         value: 10000

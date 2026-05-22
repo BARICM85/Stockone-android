@@ -231,6 +231,7 @@ This project already includes [vercel.json](./vercel.json) for SPA routing.
 
 This project already includes [render.yaml](./render.yaml).
 
+- If you use Render Blueprint, the service will auto-deploy from `main` because `render.yaml` sets `autoDeploy: true`.
 - In Render, create a new `Web Service` from the same GitHub repo
 - Root directory: project root
 - Build command: `npm install`
