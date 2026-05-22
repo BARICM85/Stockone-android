@@ -16,8 +16,8 @@ export function getBrokerApiBase() {
   if (Capacitor.isNativePlatform() && (!configuredBase || isLocalApiBase(configuredBase))) {
     return trimSlash(HOSTED_API_BASE);
   }
-  if (import.meta.env.PROD && !configuredBase) {
-    return trimSlash(HOSTED_API_BASE);
+  if (import.meta.env.PROD) {
+    return '';
   }
   return configuredBase;
 }
@@ -26,6 +26,9 @@ export function getZerodhaRedirectUrl() {
   const brokerApiBase = getBrokerApiBase();
   if (brokerApiBase) {
     return `${brokerApiBase}/api/zerodha/callback`;
+  }
+  if (import.meta.env.PROD) {
+    return `${trimSlash(HOSTED_API_BASE)}/api/zerodha/callback`;
   }
   return 'http://localhost:8000/api/zerodha/callback';
 }
