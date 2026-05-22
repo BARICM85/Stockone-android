@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as d3 from 'd3';
 import { RefreshCw, TrendingUp, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getBrokerApiBase } from '@/lib/brokerClient';
 
 const BENCHMARKS = [
   { id: 'NIFTY 50', label: 'NIFTY 50' },
@@ -28,7 +29,11 @@ export default function SectorRotationSection() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['rrg', benchmark, tailLength],
     queryFn: async () => {
-      const res = await fetch(`/api/rrg?benchmark=${encodeURIComponent(benchmark)}&tail=${tailLength}`);
+      const apiBase = getBrokerApiBase();
+      if (!apiBase) {
+        throw new Error('Broker API base is not configured. Set VITE_API_BASE_URL or VITE_HOSTED_API_BASE_URL.');
+      }
+      const res = await fetch(`${apiBase}/api/rrg?benchmark=${encodeURIComponent(benchmark)}&tail=${tailLength}`);
       if (!res.ok) throw new Error('Failed to fetch RRG data');
       return res.json();
     },
