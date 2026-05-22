@@ -13,17 +13,7 @@ export default function BrokerSyncPanel({ currentStocks = [], onSynced }) {
   const [disconnecting, setDisconnecting] = useState(false);
   const brokerApiBase = getBrokerApiBase();
   const redirectUrl = getZerodhaRedirectUrl();
-  const isWebDeployment = import.meta.env.PROD && !Capacitor.isNativePlatform();
   const usesHostedBroker = Boolean(brokerApiBase) && !/localhost|127\.0\.0\.1/i.test(brokerApiBase);
-  const backendLabel = isWebDeployment
-    ? 'Web frontend via Vercel proxy'
-    : usesHostedBroker
-      ? 'Hosted backend'
-      : 'Local backend';
-  const redirectLabel = isWebDeployment
-    ? 'Zerodha callback handled by the Render backend behind the proxy'
-    : 'Zerodha redirect URL';
-  const redirectDisplay = isWebDeployment ? 'managed by backend proxy' : redirectUrl;
   const getHoldingKey = (row) => `${String(row?.exchange || 'NSE').trim().toUpperCase()}:${String(row?.symbol || '').trim().toUpperCase()}`;
 
   const currentSymbols = useMemo(
@@ -246,9 +236,7 @@ export default function BrokerSyncPanel({ currentStocks = [], onSynced }) {
 
             <div className="mt-4 text-sm text-slate-400">
               {backendUnavailable
-                ? isWebDeployment
-                  ? 'The backend behind the Vercel proxy is currently unavailable. Check the Render service, then retry Zerodha connect.'
-                  : 'Hosted broker backend is currently unavailable. Restart or redeploy the backend service in Render, then retry Zerodha connect.'
+                ? 'Hosted broker backend is currently unavailable. Restart or redeploy the backend service in Render, then retry Zerodha connect.'
                 : status?.connected
                 ? `Ready to sync live holdings. Current local portfolio already contains ${currentSymbols.size} symbols.`
                 : usesHostedBroker
@@ -281,11 +269,11 @@ export default function BrokerSyncPanel({ currentStocks = [], onSynced }) {
       </div>
 
       <div className="mt-5 rounded-[24px] border border-white/8 bg-[#111c2c] p-4 text-sm text-slate-400">
-        {backendLabel}:
+        {usesHostedBroker ? 'Hosted backend active:' : 'Local backend active:'}
         <code className="mx-1 rounded bg-black/20 px-2 py-0.5 text-slate-200">{brokerApiBase || 'http://localhost:8000'}</code>
-        {' '}with {redirectLabel}
-        <code className="mx-1 rounded bg-black/20 px-2 py-0.5 text-slate-200">{redirectDisplay}</code>.
-        {!isWebDeployment && !usesHostedBroker ? (
+        {' '}with Zerodha redirect URL
+        <code className="mx-1 rounded bg-black/20 px-2 py-0.5 text-slate-200">{redirectUrl}</code>.
+        {!usesHostedBroker ? (
           <>
             {' '}Run <code className="mx-1 rounded bg-black/20 px-2 py-0.5 text-slate-200">npm run dev:server</code> for local broker testing.
           </>
