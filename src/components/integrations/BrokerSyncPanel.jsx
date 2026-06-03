@@ -45,7 +45,12 @@ export default function BrokerSyncPanel({ currentStocks = [], onSynced }) {
   const connect = async () => {
     try {
       const data = await getZerodhaLoginUrl(Capacitor.isNativePlatform() ? 'native' : 'web');
-      window.location.assign(data.loginUrl);
+      if (Capacitor.isNativePlatform()) {
+        const { Browser } = await import('@capacitor/browser');
+        await Browser.open({ url: data.loginUrl });
+      } else {
+        window.location.assign(data.loginUrl);
+      }
     } catch (error) {
       toast.error(error.message);
     }

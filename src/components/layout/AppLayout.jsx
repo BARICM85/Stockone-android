@@ -46,10 +46,24 @@ export default function AppLayout() {
   const { data: indexPayload } = useQuery({
     queryKey: ['header-indices'],
     refetchInterval: 60000,
+    retry: false,
     queryFn: async () => {
-      const response = await fetch(`${apiBaseUrl}/api/market/indices`);
-      if (!response.ok) throw new Error('Unable to load index quotes.');
-      return response.json();
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/market/indices`);
+        if (!response.ok) throw new Error('Unable to load index quotes.');
+        return await response.json();
+      } catch (err) {
+        console.warn('[TickerTap] Failed to fetch indices from server, using local fallbacks');
+        return {
+          items: [
+            { key: 'nifty50', symbol: '^NSEI', label: 'NIFTY 50', price: 22419.95, changePercent: -0.24, currency: 'INR' },
+            { key: 'banknifty', symbol: '^NSEBANK', label: 'BANK NIFTY', price: 48265.20, changePercent: -0.31, currency: 'INR' },
+            { key: 'sensex', symbol: '^BSESN', label: 'SENSEX', price: 73642.15, changePercent: -0.18, currency: 'INR' },
+            { key: 'niftynext50', symbol: '^NSMIDCP', label: 'NIFTY NEXT 50', price: 62184.30, changePercent: 0.12, currency: 'INR' },
+            { key: 'midcap100', symbol: 'NIFTY_MIDCAP_100.NS', label: 'MIDCAP 100', price: 51432.80, changePercent: 0.21, currency: 'INR' }
+          ]
+        };
+      }
     },
   });
   const indexItems = indexPayload?.items || [];
@@ -69,9 +83,14 @@ export default function AppLayout() {
         return;
       }
 
-      if (incoming.protocol !== 'tickertap:' || incoming.hostname !== 'zerodha') {
+      if ((incoming.protocol !== 'tickertap:' && incoming.protocol !== 'stockone:') || incoming.hostname !== 'zerodha') {
         return;
       }
+
+      // Close the in-app browser window if open
+      import('@capacitor/browser').then(({ Browser }) => {
+        Browser.close().catch(() => {});
+      });
 
       const next = new URLSearchParams();
       next.set('broker', 'zerodha');

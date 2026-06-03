@@ -13,7 +13,7 @@
     "build:web": "node -e \"require('fs').mkdirSync('node_modules/.vite-temp',{ recursive: true }); require('fs').mkdirSync('node_modules/.vite',{ recursive: true });\" && vite build --configLoader runner --mode web",
     "android:sync": "npm run build:web && npx cap sync android",
     "android:open": "npx cap open android",
-    "android:build": "npm run build:web && npx cap sync android && cd android && gradlew.bat assembleDebug",
+    "android:build": "npm run build:web && npx cap sync android && cd android && chmod +x gradlew && ./gradlew assembleDebug",
     "lint": "eslint . --quiet",
     "preview": "vite preview --configLoader runner"
   },
@@ -21,6 +21,7 @@
     "@capacitor-firebase/authentication": "^8.2.0",
     "@capacitor/android": "^8.3.0",
     "@capacitor/app": "^8.1.0",
+    "@capacitor/browser": "^8.0.3",
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
     "@radix-ui/react-alert-dialog": "^1.1.6",

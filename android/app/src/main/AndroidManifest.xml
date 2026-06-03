@@ -30,6 +30,10 @@
                     android:scheme="tickertap"
                     android:host="zerodha"
                     android:pathPrefix="/callback" />
+                <data
+                    android:scheme="stockone"
+                    android:host="zerodha"
+                    android:pathPrefix="/callback" />
             </intent-filter>
 
         </activity>
